@@ -11,6 +11,7 @@
 typedef int pid_t;
 
 static void syscall_handler (struct intr_frame *);
+// 1: halt, exit, exec, wait, read, write - 20192058
 static void memory_access_check(void *esp, struct thread *t, int c);
 static void halt (void);
 static void exit (int status); 
@@ -21,6 +22,15 @@ static int write (int fd, const void *buffer, unsigned size);
 
 int fibonacci(int n);
 int max_of_four_int(int a, int b, int c, int d);
+
+// 2: create, remove, open, close, filesize, read(file), write(file), seek, tell - 20190258
+static bool create (const char *file, unsigned initial_size);
+static bool remove (const char *file);
+static int open (const char *file);
+static int filesize (int fd);
+static void seek (int fd, unsigned position); 
+static unsigned tell (int fd);
+static void close (int fd); 
 
 void
 syscall_init (void) 
@@ -49,7 +59,6 @@ syscall_handler (struct intr_frame *f UNUSED)
   memory_access_check(f->esp, t, 0);
 
   int sys_num = *(int *)(f->esp);
-  // 1: halt, exit, exec, wait, read, write
   switch(sys_num){
     case SYS_HALT:
       halt();
@@ -66,6 +75,22 @@ syscall_handler (struct intr_frame *f UNUSED)
       memory_access_check(f->esp, t, 1);
       f->eax = wait(*(pid_t*)(f->esp+4));
       break;
+    case SYS_CREATE:
+      memory_access_check(f->esp, t, 2);
+      f->eax = create(*(char**)(f->esp+4), *(unsigned*)(f->esp+8));
+      break;
+    case SYS_REMOVE:
+      memory_access_check(f->esp, t, 1);
+      f->eax = remove(*(char**)(f->esp+4));
+      break;
+    case SYS_OPEN:
+      memory_access_check(f->esp, t, 1);
+      f->eax = open(*(char**)(f->esp+4));
+      break;
+    case SYS_FILESIZE:
+      memory_access_check(f->esp, t, 1);
+      f->eax = filesize(*(int*)(f->esp+4));
+      break;
     case SYS_READ:
       memory_access_check(f->esp, t, 3);
       read(*(int*)(f->esp+4), *(void**)(f->esp+8), *(unsigned*)(f->esp+12));
@@ -73,6 +98,18 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_WRITE:
       memory_access_check(f->esp, t, 3);
       write(*(int*)(f->esp+4), *(void**)(f->esp+8), *(unsigned*)(f->esp+12));
+      break;
+    case SYS_SEEK:
+      memory_access_check(f->esp, t, 2);
+      seek(*(int*)(f->esp+4), *(unsigned*)(f->esp+8));
+      break;
+    case SYS_TELL:
+      memory_access_check(f->esp, t, 1);
+      f->eax = tell(*(int*)(f->esp+4));
+      break;
+    case SYS_CLOSE:
+      memory_access_check(f->esp, t, 1);
+      close(*(int*)(f->esp+4));
       break;
     case SYS_FIBONACCI:
       memory_access_check(f->esp, t, 1);
@@ -175,4 +212,56 @@ max_of_four_int(int a, int b, int c, int d)
 	int max1 = a > b ? a : b;
   int max2 = c > d ? c : d;
   return max1 > max2 ? max1 : max2;
+}
+
+// 2: 20190258
+static bool 
+create (const char *file, unsigned initial_size)
+{
+  struct thread *t = thread_current();
+  if(!is_user_vaddr(file) || pagedir_get_page(t->pagedir, file) == NULL)
+      exit(-1);
+  return false;
+}
+
+static bool 
+remove (const char *file)
+{
+  struct thread *t = thread_current();
+  if(!is_user_vaddr(file) || pagedir_get_page(t->pagedir, file) == NULL)
+      exit(-1);
+  return false;
+}
+
+static int 
+open (const char *file)
+{
+  struct thread *t = thread_current();
+  if(!is_user_vaddr(file) || pagedir_get_page(t->pagedir, file) == NULL)
+      exit(-1);
+  return -1;
+}
+
+static int 
+filesize (int fd)
+{
+  return -1;
+}
+
+static void 
+seek (int fd, unsigned position)
+{
+  //
+}
+
+static unsigned 
+tell (int fd)
+{
+  return 0;
+}
+
+static void 
+close (int fd)
+{
+  //
 }
