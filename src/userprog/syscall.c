@@ -7,6 +7,8 @@
 #include "userprog/pagedir.h"
 #include "userprog/process.h"
 #include "devices/shutdown.h"
+#include "filesys/filesys.h"
+#include "filesys/file.h"
 
 typedef int pid_t;
 
@@ -93,11 +95,11 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;
     case SYS_READ:
       memory_access_check(f->esp, t, 3);
-      read(*(int*)(f->esp+4), *(void**)(f->esp+8), *(unsigned*)(f->esp+12));
+      f->eax = read(*(int*)(f->esp+4), *(void**)(f->esp+8), *(unsigned*)(f->esp+12));
       break;
     case SYS_WRITE:
       memory_access_check(f->esp, t, 3);
-      write(*(int*)(f->esp+4), *(void**)(f->esp+8), *(unsigned*)(f->esp+12));
+      f->eax = write(*(int*)(f->esp+4), *(void**)(f->esp+8), *(unsigned*)(f->esp+12));
       break;
     case SYS_SEEK:
       memory_access_check(f->esp, t, 2);
@@ -168,9 +170,9 @@ read (int fd, void *buffer, unsigned size)
       *(uint8_t*)buffer = input_getc();
       buffer+=sizeof(uint8_t);
     }
+    return size;
   }
   else exit(-1);
-  return size;
 }
 
 static int 
@@ -182,9 +184,9 @@ write (int fd, const void *buffer, unsigned size)
   if (fd == 1)
   {
     putbuf(buffer, size);
+    return size;
   }
   else exit(-1);
-  return size;
 }
 
 int 
@@ -221,7 +223,7 @@ create (const char *file, unsigned initial_size)
   struct thread *t = thread_current();
   if(!is_user_vaddr(file) || pagedir_get_page(t->pagedir, file) == NULL)
       exit(-1);
-  return false;
+  return filesys_create(file, initial_size);
 }
 
 static bool 
@@ -230,7 +232,7 @@ remove (const char *file)
   struct thread *t = thread_current();
   if(!is_user_vaddr(file) || pagedir_get_page(t->pagedir, file) == NULL)
       exit(-1);
-  return false;
+  return filesys_remove(file);
 }
 
 static int 
@@ -239,29 +241,30 @@ open (const char *file)
   struct thread *t = thread_current();
   if(!is_user_vaddr(file) || pagedir_get_page(t->pagedir, file) == NULL)
       exit(-1);
-  return -1;
+  //struct file* targ_file = filesys_open(file);
+  return filesys_open(file);
 }
 
 static int 
 filesize (int fd)
 {
-  return -1;
+  return file_length((struct file*)fd);
 }
 
 static void 
 seek (int fd, unsigned position)
 {
-  //
+  file_seek((struct file*)fd, position);
 }
 
 static unsigned 
 tell (int fd)
 {
-  return 0;
+  return file_tell((struct file*)fd);
 }
 
 static void 
 close (int fd)
 {
-  //
+  file_close((struct file*)fd);
 }
