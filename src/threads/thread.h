@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/synch.h"
+#include "filesys/file.h"
 
 #define BUF_MAX 131
 
@@ -114,7 +115,6 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic; /* Detects stack overflow. */
-	/* user */
   };
 
 /* If false (default), use round-robin scheduler.

@@ -23,8 +23,6 @@
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
-#define MAX_BUF 100
-
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -43,27 +41,29 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
-  /* 1: 20190258 */
-  char *file_name_ptr = NULL, *last;
-  file_name_ptr = palloc_get_page (0);
-  strlcpy(file_name_ptr, file_name, PGSIZE);
-  strtok_r(file_name_ptr, " ", &last);
+  /* user */
+  char *file_name_ptr, *ptr_tok;
+  char temp_name[130];
+  //file_name_ptr = palloc_get_page (0);
+  strlcpy(temp_name, file_name, strlen(file_name)+1);
+  file_name_ptr = strtok_r(temp_name, " ", &ptr_tok);
 
   if(filesys_open(file_name_ptr) == NULL) return -1;
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name_ptr, PRI_DEFAULT, start_process, fn_copy);
-  
   //2: 20190258
   struct thread *t = thread_current();
-  sema_down(&(t->exec_lock));
+  sema_down(&t->exec_lock);//for synchronization
 
   if (tid == TID_ERROR){
     palloc_free_page (fn_copy);
-    palloc_free_page (file_name_ptr);
+    //palloc_free_page (file_name_ptr);
   }
+  if (tid == -1) return TID_ERROR;
 
   //2: 20190258
+  //multi-oom
   struct list_elem *e = list_begin(&(t->children));
   struct thread *child;
   while(e != list_end(&(t->children))){
@@ -91,16 +91,18 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
+  
   /* If load failed, quit. */
   palloc_free_page (file_name);
 
   // 2: 20190258
-  sema_up(&(thread_current()->parent->exec_lock));
-  if (!success){
+  sema_up(&thread_current()->parent->exec_lock);
+  if (!success){ 
+    //thread_exit ();
     thread_current()->wait_status = 1;
     exit(-1);
-  } 
-  
+  }
+
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -276,9 +278,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Argument Passing - 20190258 */
-  char file_buf[MAX_BUF];
+  char file_buf[100];
   strlcpy(file_buf, file_name, strlen(file_name)+1);
-  char *argv[MAX_BUF];
+  char *argv[100];
   int argc = 0;
   char *token, *last;
   if((token = strtok_r(file_buf, " ", &last)) != NULL){

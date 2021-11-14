@@ -467,19 +467,18 @@ init_thread (struct thread *t, const char *name, int priority)
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
-  
 #ifdef USERPROG
-  // 1: 20190258
+  //1: 20190258
   sema_init(&(t->parent_lock), 0);
   sema_init(&(t->self_lock), 0);
   list_init(&(t->children));
   list_push_back(&(running_thread()->children), &(t->child_elem));
-  // 2: 20190258
-  for(int i=0; i<BUF_MAX; i++){
-    t->fd_table[i] = NULL;
-  }
-  t->parent = running_thread();
+  //2: 20190258
   sema_init(&(t->exec_lock), 0);
+  t->parent = running_thread();
+  for(int i=0;i<131;i++)
+	  t->fd_table[i] = NULL;
+  
   t->wait_status = 0;
 #endif
 }
