@@ -52,10 +52,10 @@ process_execute (const char *file_name)
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name_ptr, PRI_DEFAULT, start_process, fn_copy);
-  
+
   //2: 20190258
   struct thread *t = thread_current();
-  sema_down(&t->exec_lock);//for synchronization
+  sema_down(&t->exec_lock);
 
   if (tid == TID_ERROR){
     palloc_free_page (fn_copy);
