@@ -6,6 +6,8 @@
 #include <stdint.h>
 #include "threads/synch.h"
 
+#define BUF_MAX 131
+
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -103,6 +105,11 @@ struct thread
 	 struct list children;
 	 struct list_elem child_elem;
 	 int exit_status;
+    // 2: 20190258
+    struct file *fd_table[BUF_MAX];
+    struct thread *parent;
+    struct semaphore exec_lock;
+    int wait_status;
 #endif
 
     /* Owned by thread.c. */

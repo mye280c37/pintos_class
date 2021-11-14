@@ -18,6 +18,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/synch.h"
+#include "userprog/syscall.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -42,7 +43,7 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
-  /* user */
+  /* 1: 20190258 */
   char *file_name_ptr = NULL, *last;
   file_name_ptr = palloc_get_page (0);
   strlcpy(file_name_ptr, file_name, PGSIZE);
@@ -52,9 +53,25 @@ process_execute (const char *file_name)
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name_ptr, PRI_DEFAULT, start_process, fn_copy);
+  
+  //2: 20190258
+  struct thread *t = thread_current();
+  sema_down(&(t->exec_lock));
+
   if (tid == TID_ERROR){
     palloc_free_page (fn_copy);
     palloc_free_page (file_name_ptr);
+  }
+
+  //2: 20190258
+  struct list_elem *e = list_begin(&(t->children));
+  struct thread *child;
+  while(e != list_end(&(t->children))){
+	  child = list_entry(e, struct thread, child_elem);
+    if(child->wait_status == 1){
+      return process_wait(tid);
+    }
+    e = list_next(e);
   }
   return tid;
 }
@@ -76,9 +93,14 @@ start_process (void *file_name_)
   success = load (file_name, &if_.eip, &if_.esp);
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  if (!success) 
-    thread_exit ();
 
+  // 2: 20190258
+  sema_up(&(thread_current()->parent->exec_lock));
+  if (!success){
+    thread_current()->wait_status = 1;
+    exit(-1);
+  } 
+  
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
