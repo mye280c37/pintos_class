@@ -41,17 +41,18 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
-  /* user */
-  char *file_name_ptr, *ptr_tok;
+  /* 1: 20190258 */
+  char *file_name_ptr, *last;
   char temp_name[130];
   //file_name_ptr = palloc_get_page (0);
   strlcpy(temp_name, file_name, strlen(file_name)+1);
-  file_name_ptr = strtok_r(temp_name, " ", &ptr_tok);
+  file_name_ptr = strtok_r(temp_name, " ", &last);
 
   if(filesys_open(file_name_ptr) == NULL) return -1;
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name_ptr, PRI_DEFAULT, start_process, fn_copy);
+  
   //2: 20190258
   struct thread *t = thread_current();
   sema_down(&t->exec_lock);//for synchronization
