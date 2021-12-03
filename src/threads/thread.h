@@ -4,8 +4,13 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-#include "threads/synch.h"
+#include "threads/synch.h" 
 #include "filesys/file.h"
+
+#ifndef USERPROG
+/* Project #3 */
+extern bool thread_prior_aging;
+#endif
 
 #define BUF_MAX 131
 
