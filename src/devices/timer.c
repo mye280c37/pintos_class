@@ -30,6 +30,9 @@ static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
 
+/* Project #3 : 20190258*/
+static struct list blocked_list;
+
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
 void
@@ -37,6 +40,9 @@ timer_init (void)
 {
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
+  // 3: 20190258
+  list_init(&blocked_list);
+  //printf("blocked list initialize\n");
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -89,11 +95,28 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
+  //printf("timer sleep start\n");
   int64_t start = timer_ticks ();
 
   ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks) 
-    thread_yield ();
+  /* orgin code */
+  // while (timer_elapsed (start) < ticks) 
+  //   thread_yield ();
+
+  // 3: 20190258
+  struct thread *cur = thread_current();
+  enum intr_level old_level;
+
+  ASSERT (!intr_context());
+
+  old_level = intr_disable();
+  cur->wake_time = start+ticks;
+  //printf("try push back in timer sleep\n");
+  list_push_back(&blocked_list, &cur->elem);
+  //printf("push back in timer sleep\n");
+  thread_block();
+  intr_set_level(old_level);
+
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -171,7 +194,32 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
-  thread_tick ();
+
+  // 3: 20190258
+  struct thread *t;
+  struct list_elem *t_elem = list_begin(&blocked_list);
+  // check wake time of thread in blocked list
+  while(t_elem != list_end(&blocked_list)){
+    t = list_entry(t_elem, struct thread, elem);
+    if(t->wake_time <= ticks){
+      //printf("\nlist remove in timer\n");
+      t_elem = list_remove(t_elem);
+      //printf("complete\n");
+      thread_unblock(t); // push t into ready_list
+    }
+    else{
+      t_elem = list_next(t_elem);
+    }
+  }
+  // priority aging & thread_mlfqs
+  if(thread_prior_aging || thread_mlfqs){
+    // every 4 ticks, aging
+    if(timer_ticks() % 4 == 0){
+      thread_aging_all();
+    }
+  }
+  // ??
+  thread_tick();
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

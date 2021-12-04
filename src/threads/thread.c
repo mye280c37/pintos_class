@@ -143,10 +143,11 @@ thread_tick (void)
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
 
-#ifndef USERPROG
-  /* Project #3 */
-  thread_wake_up();
-#endif
+// #ifndef USERPROG
+//   /* Project #3 */
+//   if(thread_prior_aging ==  true)
+//     thread_aging_all();
+// #endif
 }
 
 /* Prints thread statistics. */
@@ -176,6 +177,7 @@ tid_t
 thread_create (const char *name, int priority,
                thread_func *function, void *aux) 
 {
+  // printf("thread create call\n");
   struct thread *t;
   struct kernel_thread_frame *kf;
   struct switch_entry_frame *ef;
@@ -210,6 +212,9 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
+  // printf("thread unblock finish\n");
+  // 3: 20190258
+  if(priority > thread_get_priority()) thread_yield();
 
   return tid;
 }
@@ -247,7 +252,10 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  // list_push_back (&ready_list, &t->elem);
+  // 3: 20190258
+  list_insert_ordered(&ready_list, &t->elem, thread_priority_cmp, NULL);
+  
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -317,8 +325,15 @@ thread_yield (void)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
-  if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+  // 3: 20190258
+  if (cur != idle_thread){
+    if(thread_mlfqs){
+      list_push_back (&ready_list, &cur->elem);
+    }
+    else{
+      list_insert_ordered(&ready_list, &cur->elem, thread_priority_cmp, NULL);
+    }
+  }
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -345,7 +360,12 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
+  // 3: 20190258
+  if(thread_mlfqs) return;
+  struct thread *cur = thread_current ();
+  int origin_priority = cur->priority;
+  cur->priority = new_priority;
+  if(new_priority < origin_priority) thread_yield();
 }
 
 /* Returns the current thread's priority. */
@@ -359,15 +379,17 @@ thread_get_priority (void)
 void
 thread_set_nice (int nice UNUSED) 
 {
-  /* Not yet implemented. */
+  struct thread *cur = thread_current ();
+  cur->nice = nice;
+  int new_priority = PRI_MAX-(cur->recent_cpu/4)-(cur->nice*2);
+  thread_set_priority(new_priority);
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return thread_current()->nice;
 }
 
 /* Returns 100 times the system load average. */
@@ -383,9 +405,43 @@ int
 thread_get_recent_cpu (void) 
 {
   /* Not yet implemented. */
-  return 0;
+  return 100 * thread_current()->recent_cpu;
 }
-
+
+/* Project # 3*/
+// 3: 20190258
+bool 
+thread_priority_cmp(const struct list_elem *a, const struct list_elem *b, void *aux)
+{
+  struct thread *t_a = list_entry(a, struct thread, elem);
+  struct thread *t_b = list_entry(b, struct thread, elem);
+  return t_a->priority > t_b->priority;
+}
+
+/* aging all threads in all_list */
+void 
+thread_aging_all()
+{
+  //printf("thread aging\n");
+  struct thread *cur = thread_current();
+  struct thread *t;
+  struct list_elem *t_elem = list_begin(&ready_list);
+  while(t_elem != list_end(&ready_list)){
+    t = list_entry(t_elem, struct thread, elem);
+    //t->priority = sub_float_float(sub_float_float(add_float_int(0,PRI_MAX), div_float_int(t->recent_cpu, 4)), mul_int_float(2, add_float_int(0, t->nice))) / FRACTION;
+    t->priority += 1;
+
+    if(t->priority > PRI_MAX)
+      t->priority = PRI_MAX;
+    
+    if (t->priority < PRI_MIN)
+      t->priority = PRI_MIN;
+
+    t_elem = list_next(t_elem);
+  }
+}
+/* Project # 3*/
+
 /* Idle thread.  Executes when no other thread is ready to run.
 
    The idle thread is initially put on the ready list by
@@ -473,6 +529,10 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+
+  // 3: 20190258
+  t->recent_cpu = 0;
+  t->nice = 0;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

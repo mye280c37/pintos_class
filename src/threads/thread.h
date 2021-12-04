@@ -13,6 +13,8 @@ extern bool thread_prior_aging;
 #endif
 
 #define BUF_MAX 131
+// 3: 20190258
+#define FRACTION (1<<14)
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -102,6 +104,11 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
+    // 3: 20190258
+    int wake_time;                      /* wake up time when thread go to sleep */
+    int recent_cpu;
+	 int nice;
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;
@@ -157,5 +164,9 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+// 3 : 20190258
+bool thread_priority_cmp(const struct list_elem *a, const struct list_elem *b, void *aux);
+void thread_aging_all(void);
 
 #endif /* threads/thread.h */
