@@ -3,6 +3,7 @@
 #include <inttypes.h>
 #include <round.h>
 #include <stdio.h>
+#include <list.h>
 #include "devices/pit.h"
 #include "threads/interrupt.h"
 #include "threads/synch.h"
@@ -42,7 +43,6 @@ timer_init (void)
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
   // 3: 20190258
   list_init(&blocked_list);
-  //printf("blocked list initialize\n");
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -97,23 +97,13 @@ timer_sleep (int64_t ticks)
 {
   //printf("timer sleep start\n");
   int64_t start = timer_ticks ();
-
-  ASSERT (intr_get_level () == INTR_ON);
-  /* orgin code */
-  // while (timer_elapsed (start) < ticks) 
-  //   thread_yield ();
-
-  // 3: 20190258
-  struct thread *cur = thread_current();
   enum intr_level old_level;
 
-  ASSERT (!intr_context());
-
+  ASSERT (intr_get_level () == INTR_ON);
+  // 3: 20190258
   old_level = intr_disable();
-  cur->wake_time = start+ticks;
-  //printf("try push back in timer sleep\n");
-  list_push_back(&blocked_list, &cur->elem);
-  //printf("push back in timer sleep\n");
+  thread_current()->wakeup = start+ticks;
+  list_push_back(&blocked_list, &thread_current()->elem);
   thread_block();
   intr_set_level(old_level);
 
@@ -194,17 +184,15 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
-
+  
   // 3: 20190258
-  struct thread *t;
   struct list_elem *t_elem = list_begin(&blocked_list);
   // check wake time of thread in blocked list
   while(t_elem != list_end(&blocked_list)){
-    t = list_entry(t_elem, struct thread, elem);
-    if(t->wake_time <= ticks){
-      //printf("\nlist remove in timer\n");
+    struct thread *t = list_entry(t_elem, struct thread, elem);
+    int64_t wakeup = t->wakeup;
+    if(wakeup <= ticks){
       t_elem = list_remove(t_elem);
-      //printf("complete\n");
       thread_unblock(t); // push t into ready_list
     }
     else{
@@ -213,12 +201,20 @@ timer_interrupt (struct intr_frame *args UNUSED)
   }
   // priority aging & thread_mlfqs
   if(thread_prior_aging || thread_mlfqs){
+    // increase recent_cpu one
+    thread_current()->recent_cpu = ADD_FI(thread_current()->recent_cpu, 1); 
+    if(timer_ticks() % TIMER_FREQ == 0){
+      // update load_avg
+      update_load_avg();
+      // recalculate recent_cpu
+      recal_recent_cpu();
+    }
     // every 4 ticks, aging
     if(timer_ticks() % 4 == 0){
       thread_aging_all();
     }
   }
-  // ??
+
   thread_tick();
 }
 

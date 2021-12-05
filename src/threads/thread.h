@@ -16,6 +16,21 @@ extern bool thread_prior_aging;
 // 3: 20190258
 #define FRACTION (1<<14)
 
+#define CONV_TO_F(n) ((n)*(FRACTION))
+#define ROUND_TO_Z(x) ((x)/(FRACTION))
+#define ROUND_TO_N(x) ((x>=0)?((x+FRACTION/2)/FRACTION):((x-FRACTION/2)/FRACTION))
+
+#define ADD_FF(x, y) (x)+(y)
+#define SUB_FF(x, y) (x)-(y)
+#define MUL_FF(x, y) (((int64_t)x)*(y)/(FRACTION))
+#define DIV_FF(x, y) (((int64_t)x)*(FRACTION)/(y))
+
+#define ADD_FI(x, n) ((x)+(n)*(FRACTION))
+#define SUB_FI(x, n) ((x)-(n)*(FRACTION))
+#define MUL_FI(x, n) ((x)*(n))
+#define DIV_FI(x, n) ((x)/(n))
+
+
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -99,15 +114,14 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
+    // 3: 20190258
+    int64_t wakeup;                      /* wake up time when thread go to sleep */
+    int recent_cpu;
+	 int nice;
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
-
-    // 3: 20190258
-    int wake_time;                      /* wake up time when thread go to sleep */
-    int recent_cpu;
-	 int nice;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -168,5 +182,7 @@ int thread_get_load_avg (void);
 // 3 : 20190258
 bool thread_priority_cmp(const struct list_elem *a, const struct list_elem *b, void *aux);
 void thread_aging_all(void);
+void update_load_avg(void);
+void recal_recent_cpu(void);
 
 #endif /* threads/thread.h */
